@@ -589,14 +589,13 @@ class OpenTelemetry(CustomLogger):
         )
         ctx, parent_span = self._get_span_context(kwargs)
 
-        if get_secret_bool("USE_OTEL_LITELLM_REQUEST_SPAN"):
-            primary_span_parent = None
-        else:
-            primary_span_parent = parent_span
+        # Note: We no longer use parent_span to determine primary_span_parent
+        # because we always want to create a new child span, not reuse the parent
+        # The context (ctx) will ensure proper parent-child relationship
 
         # 1. Primary span
         span = self._start_primary_span(
-            kwargs, response_obj, start_time, end_time, ctx, primary_span_parent
+            kwargs, response_obj, start_time, end_time, ctx, parent_span=None
         )
 
         # 2. Raw‐request sub-span (if enabled)
@@ -612,9 +611,9 @@ class OpenTelemetry(CustomLogger):
         if self.config.enable_events:
             self._emit_semantic_logs(kwargs, response_obj, span)
 
-        # 6. End parent span
-        if parent_span is not None:
-            parent_span.end(end_time=self._to_ns(datetime.now()))
+        # Note: We do NOT end the parent_span here because we didn't create it
+        # The parent span is created by external decorators (e.g., @observe())
+        # and should be ended by whoever created it
 
     def _start_primary_span(
         self,
@@ -628,7 +627,9 @@ class OpenTelemetry(CustomLogger):
         from opentelemetry.trace import Status, StatusCode
 
         otel_tracer: Tracer = self.get_tracer_to_use_for_request(kwargs)
-        span = parent_span or otel_tracer.start_span(
+        # Always create a new span (not reuse parent_span)
+        # The context parameter ensures this span is a child of any active span
+        span = otel_tracer.start_span(
             name=self._get_span_name(kwargs),
             start_time=self._to_ns(start_time),
             context=context,
@@ -1453,7 +1454,9 @@ class OpenTelemetry(CustomLogger):
                         format(span_context.span_id, "016x"),
                         current_span.is_recording(),
                     )
-                    return context.get_current(), current_span
+                    # Return both the context AND the current span
+                    # This ensures that we create child spans rather than siblings
+                    return trace.set_span_in_context(current_span), current_span
         except Exception as e:
             verbose_logger.debug(
                 "OpenTelemetry: Error getting current span: %s", str(e)
