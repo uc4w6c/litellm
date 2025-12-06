@@ -387,3 +387,62 @@ def test_get_text_completion_content_for_langfuse():
     mock_response = TextCompletionResponse()
     result = LangFuseLogger._get_text_completion_content_for_langfuse(mock_response)
     assert result is None
+
+
+def test_langfuse_trace_id_in_response_hidden_params(monkeypatch):
+    """
+    Test that Langfuse trace_id is accessible in response._hidden_params
+
+    The langfuse_trace_id is set to the litellm_call_id by default,
+    ensuring synchronization between LiteLLM and Langfuse trace IDs.
+    """
+    from litellm import completion
+    import litellm
+    import respx
+    import httpx
+
+    litellm.disable_aiohttp_transport = True
+    monkeypatch.setattr(litellm, "success_callback", ["langfuse"])
+
+    with respx.mock:
+        # Mock Langfuse endpoint
+        langfuse_mock = respx.post(
+            "https://*.cloud.langfuse.com/api/public/ingestion"
+        ).mock(return_value=httpx.Response(200))
+
+        # Test 1: Without custom trace_id
+        response = completion(
+            model="openai/my-fake-endpoint",
+            messages=[{"role": "user", "content": "hello from litellm"}],
+            stream=False,
+            mock_response="Hello from litellm",
+        )
+
+        # Verify response contains Langfuse trace_id in _hidden_params
+        assert hasattr(response, "_hidden_params")
+        assert response._hidden_params is not None
+        assert "langfuse_trace_id" in response._hidden_params
+        assert "litellm_call_id" in response._hidden_params
+
+        # By default, langfuse_trace_id should equal litellm_call_id
+        trace_id = response._hidden_params["langfuse_trace_id"]
+        litellm_call_id = response._hidden_params["litellm_call_id"]
+        assert trace_id == litellm_call_id
+        assert isinstance(trace_id, str)
+        assert len(trace_id) > 0
+
+        print(f"Langfuse trace_id (default): {trace_id}")
+
+        # Test 2: With custom trace_id in metadata
+        custom_trace_id = "my-custom-trace-id"
+        response2 = completion(
+            model="openai/my-fake-endpoint",
+            messages=[{"role": "user", "content": "hello again"}],
+            stream=False,
+            mock_response="Hello again",
+            metadata={"trace_id": custom_trace_id},
+        )
+
+        # When custom trace_id is provided, langfuse_trace_id should use it
+        assert response2._hidden_params["langfuse_trace_id"] == custom_trace_id
+        print(f"Langfuse trace_id (custom): {response2._hidden_params['langfuse_trace_id']}")

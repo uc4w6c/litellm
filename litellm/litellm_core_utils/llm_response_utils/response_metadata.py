@@ -40,8 +40,9 @@ class ResponseMetadata:
         ## ADD OTHER HIDDEN PARAMS
         model_info = kwargs.get("model_info", {}) or {}
         model_id = model_info.get("id", None)
+        litellm_call_id = getattr(logging_obj, "litellm_call_id", None)
         new_params = {
-            "litellm_call_id": getattr(logging_obj, "litellm_call_id", None),
+            "litellm_call_id": litellm_call_id,
             "api_base": get_api_base(model=model or "", optional_params=kwargs),
             "model_id": model_id,
             "response_cost": logging_obj._response_cost_calculator(
@@ -52,6 +53,16 @@ class ResponseMetadata:
             ),
             "litellm_model_name": model,
         }
+
+        # Add langfuse_trace_id for easy access when Langfuse is enabled
+        # By default, litellm_call_id is used as the Langfuse trace_id unless overridden in metadata
+        metadata = kwargs.get("metadata", {}) or {}
+        custom_trace_id = metadata.get("trace_id")
+
+        if litellm_call_id is not None:
+            # Use custom trace_id if provided, otherwise use litellm_call_id
+            new_params["langfuse_trace_id"] = custom_trace_id or litellm_call_id
+
         self._update_hidden_params(new_params)
 
     def _update_hidden_params(self, new_params: dict) -> None:
