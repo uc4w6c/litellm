@@ -741,23 +741,44 @@ class BedrockGuardrail(CustomGuardrail, BaseAWSLLM):
             )
 
             #########################################################################
-            ########## 2. Apply masking to response with output guardrail response ##########
+            ########## 2. Check if masking is needed ##########
             #########################################################################
-            self._apply_masking_to_response(
-                response=assembled_model_response,
-                bedrock_guardrail_response=output_guardrail_response,
+            # Extract masked texts to determine if masking occurred
+            masked_texts = self._extract_masked_texts_from_response(
+                output_guardrail_response
             )
 
-            #########################################################################
-            ########## 3. Return the (potentially masked) chunks ##########
-            #########################################################################
-            mock_response = MockResponseIterator(
-                model_response=assembled_model_response
-            )
+            # Only apply masking and use MockResponseIterator if masking is needed
+            if masked_texts:
+                verbose_proxy_logger.debug(
+                    "Bedrock guardrail returned masked content, rebuilding stream with masked response"
+                )
+                # Apply masking to the assembled response
+                self._apply_masking_to_response(
+                    response=assembled_model_response,
+                    bedrock_guardrail_response=output_guardrail_response,
+                )
 
-            # Return the reconstructed stream
-            async for chunk in mock_response:
-                yield chunk
+                #########################################################################
+                ########## 3. Return the masked response as a single chunk ##########
+                #########################################################################
+                mock_response = MockResponseIterator(
+                    model_response=assembled_model_response
+                )
+
+                # Return the reconstructed stream
+                async for chunk in mock_response:
+                    yield chunk
+            else:
+                verbose_proxy_logger.debug(
+                    "Bedrock guardrail passed with no masking, returning original chunks"
+                )
+                #########################################################################
+                ########## 3. Return original chunks to preserve streaming ##########
+                #########################################################################
+                # No masking needed - return original chunks to preserve streaming behavior
+                for chunk in all_chunks:
+                    yield chunk
         else:
             for chunk in all_chunks:
                 yield chunk
