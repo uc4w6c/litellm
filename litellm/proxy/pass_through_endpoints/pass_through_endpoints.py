@@ -811,6 +811,8 @@ async def pass_through_request(  # noqa: PLR0915
                     start_time=start_time,
                     passthrough_success_handler_obj=pass_through_endpoint_logging,
                     url_route=str(url),
+                    user_api_key_dict=user_api_key_dict,
+                    proxy_logging_obj=proxy_logging_obj,
                 ),
                 headers=HttpPassThroughEndpointHelpers.get_response_headers(
                     headers=response.headers,
@@ -848,6 +850,8 @@ async def pass_through_request(  # noqa: PLR0915
                     start_time=start_time,
                     passthrough_success_handler_obj=pass_through_endpoint_logging,
                     url_route=str(url),
+                    user_api_key_dict=user_api_key_dict,
+                    proxy_logging_obj=proxy_logging_obj,
                 ),
                 headers=HttpPassThroughEndpointHelpers.get_response_headers(
                     headers=response.headers,
@@ -884,6 +888,9 @@ async def pass_through_request(  # noqa: PLR0915
                 cache_hit=False,
                 request_body=_parsed_body,
                 custom_llm_provider=custom_llm_provider,
+                user_api_key_dict=user_api_key_dict,
+                proxy_logging_obj=proxy_logging_obj,
+                passthrough_logging_payload=passthrough_logging_payload,
                 **kwargs,
             )
         )

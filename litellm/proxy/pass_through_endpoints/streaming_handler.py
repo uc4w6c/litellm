@@ -35,6 +35,8 @@ class PassThroughStreamingHandler:
         start_time: datetime,
         passthrough_success_handler_obj: PassThroughEndpointLogging,
         url_route: str,
+        user_api_key_dict=None,
+        proxy_logging_obj=None,
     ):
         """
         - Yields chunks from the response
@@ -83,6 +85,8 @@ class PassThroughStreamingHandler:
                     start_time=start_time,
                     raw_bytes=raw_bytes,
                     end_time=end_time,
+                    user_api_key_dict=user_api_key_dict,
+                    proxy_logging_obj=proxy_logging_obj,
                 )
             )
         except Exception as e:
@@ -100,6 +104,8 @@ class PassThroughStreamingHandler:
         raw_bytes: List[bytes],
         end_time: datetime,
         model: Optional[str] = None,
+        user_api_key_dict=None,
+        proxy_logging_obj=None,
     ):
         """
         Route the logging for the collected chunks to the appropriate handler
@@ -171,6 +177,26 @@ class PassThroughStreamingHandler:
             standard_logging_response_object = StandardPassThroughResponseObject(
                 response=f"cannot parse chunks to standard response object. Chunks={all_chunks}"
             )
+
+        # Apply guardrails via post_call_success_hook for streaming responses
+        # This ensures applied_guardrails and guardrail_response are properly populated
+        if proxy_logging_obj is not None and user_api_key_dict is not None:
+            try:
+                # Create data dict for guardrail hook
+                data = request_body.copy() if request_body else {}
+                data["litellm_logging_obj"] = litellm_logging_obj
+
+                # Call post_call_success_hook to apply guardrails
+                standard_logging_response_object = await proxy_logging_obj.post_call_success_hook(
+                    data=data,
+                    user_api_key_dict=user_api_key_dict,
+                    response=standard_logging_response_object,
+                )
+            except Exception as e:
+                verbose_proxy_logger.warning(
+                    f"Error calling post_call_success_hook in streaming handler: {e}"
+                )
+
         await litellm_logging_obj.async_success_handler(
             result=standard_logging_response_object,
             start_time=start_time,

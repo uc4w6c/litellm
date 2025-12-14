@@ -268,6 +268,8 @@ class PassThroughEndpointLogging:
         request_body: dict,
         passthrough_logging_payload: PassthroughStandardLoggingPayload,
         custom_llm_provider: Optional[str] = None,
+        user_api_key_dict: Optional[Any] = None,
+        proxy_logging_obj: Optional[Any] = None,
         **kwargs,
     ):
         standard_logging_response_object: Optional[
@@ -331,6 +333,26 @@ class PassThroughEndpointLogging:
             passthrough_logging_payload=passthrough_logging_payload,
             kwargs=kwargs,
         )
+
+        # Apply guardrails via post_call_success_hook
+        # This ensures applied_guardrails and guardrail_response are properly populated
+        if proxy_logging_obj is not None and user_api_key_dict is not None:
+            try:
+                # Create data dict for guardrail hook
+                data = request_body.copy() if request_body else {}
+                data["litellm_logging_obj"] = logging_obj
+
+                # Call post_call_success_hook to apply guardrails
+                standard_logging_response_object = await proxy_logging_obj.post_call_success_hook(
+                    data=data,
+                    user_api_key_dict=user_api_key_dict,
+                    response=standard_logging_response_object,
+                )
+            except Exception as e:
+                from litellm._logging import verbose_proxy_logger
+                verbose_proxy_logger.warning(
+                    f"Error calling post_call_success_hook in pass_through_async_success_handler: {e}"
+                )
 
         await self._handle_logging(
             logging_obj=logging_obj,
