@@ -988,9 +988,10 @@ class Logging(LiteLLMLoggingBaseClass):
                             messages=self.messages,
                             kwargs=self.model_call_details,
                         )
-                    elif (
-                        callable(callback) and customLogger is not None
-                    ):  # custom logger functions
+                    elif callable(callback):  # custom logger functions
+                        global customLogger
+                        if customLogger is None:
+                            customLogger = CustomLogger()
                         customLogger.log_input_event(
                             model=self.model,
                             messages=self.messages,
@@ -2270,8 +2271,10 @@ class Logging(LiteLLMLoggingBaseClass):
                             "atranscription", False
                         )
                         is not True
-                        and customLogger is not None
                     ):  # custom logger functions
+                        global customLogger
+                        if customLogger is None:
+                            customLogger = CustomLogger()
                         print_verbose(
                             "success callbacks: Running Custom Callback Function - {}".format(
                                 callback
@@ -2799,9 +2802,10 @@ class Logging(LiteLLMLoggingBaseClass):
                             litellm_call_id=self.model_call_details["litellm_call_id"],
                             print_verbose=print_verbose,
                         )
-                    if (
-                        callable(callback) and customLogger is not None
-                    ):  # custom logger functions
+                    if callable(callback):  # custom logger functions
+                        global customLogger
+                        if customLogger is None:
+                            customLogger = CustomLogger()
                         customLogger.log_event(
                             kwargs=self.model_call_details,
                             response_obj=result,
